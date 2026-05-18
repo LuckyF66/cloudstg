@@ -17,35 +17,42 @@ export async function GET(request: NextRequest) {
 
     // Parse blobs and organize by path hierarchy
     const filesMap = new Map<string, any>()
+    const folderMarkers = new Set<string>()
     
+    // First pass: identify folder markers
+    blobs.forEach((blob) => {
+      if (blob.pathname.endsWith('.folder')) {
+        const folderPath = blob.pathname.slice(0, -7) // Remove '.folder'
+        folderMarkers.add(folderPath)
+      }
+    })
+    
+    // Second pass: add all items
     blobs.forEach((blob) => {
       const pathname = blob.pathname
       
-      // Skip .folder marker files but register the folder
+      // Skip .folder marker files
       if (pathname.endsWith('.folder')) {
         const folderPath = pathname.slice(0, -7) // Remove '.folder'
-        const markerUrl = blob.url // The URL of the .folder marker file
         filesMap.set(folderPath, {
           pathname: folderPath,
           filename: folderPath.split('/').filter(Boolean).pop() || 'folder',
           isFolder: true,
           size: 0,
           uploadedAt: blob.uploadedAt,
-          url: markerUrl, // Store the marker file URL for deletion
+          url: blob.url, // Store the marker file URL for deletion
         })
       } else {
-        // Regular file - don't add if we haven't already added it as part of a folder
-        if (!filesMap.has(pathname)) {
-          const filename = pathname.split('/').pop() || 'unknown'
-          filesMap.set(pathname, {
-            pathname,
-            filename,
-            isFolder: false,
-            size: blob.size,
-            uploadedAt: blob.uploadedAt,
-            url: blob.url,
-          })
-        }
+        // Regular file - always add it
+        const filename = pathname.split('/').pop() || 'unknown'
+        filesMap.set(pathname, {
+          pathname,
+          filename,
+          isFolder: false,
+          size: blob.size,
+          uploadedAt: blob.uploadedAt,
+          url: blob.url,
+        })
       }
     })
 
