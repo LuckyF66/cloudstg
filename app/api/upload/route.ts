@@ -3,7 +3,6 @@ import { put } from '@vercel/blob';
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization');
-  // Disamakan menggunakan Bearer
   const password = authHeader?.replace('Bearer ', '');
   if (password !== process.env.STORAGE_PASSWORD) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
