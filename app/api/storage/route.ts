@@ -4,14 +4,13 @@ import { list, del } from '@vercel/blob';
 function checkAuth(request: Request) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return false;
-  // Kita pakai sistem token simpel tanpa keyword "Basic" bawaan browser
+  // Kita ganti sistem Bearer token biar gak memicu pop-up otomatis browser
   const password = authHeader.replace('Bearer ', '');
   return password === process.env.STORAGE_PASSWORD;
 }
 
 export async function GET(request: Request) {
   if (!checkAuth(request)) {
-    // Diubah agar tidak memicu pop-up otomatis browser
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
@@ -42,4 +41,4 @@ export async function DELETE(request: Request) {
     await del(url);
     return NextResponse.json({ success: true });
   } catch (error) { return NextResponse.json({ error: 'Gagal menghapus' }, { status: 500 }); }
-}
+    }
