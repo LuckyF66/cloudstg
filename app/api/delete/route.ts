@@ -14,6 +14,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'No pathname provided' }, { status: 400 })
     }
 
+    // Demo mode: if no token is configured, simulate success
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json({ success: true, demo: true })
+    }
+
     await del(pathname)
 
     return NextResponse.json({ success: true })

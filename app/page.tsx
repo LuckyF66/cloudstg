@@ -65,6 +65,13 @@ export default function Home() {
     setCurrentFolder(folder)
   }
 
+  const handleLogout = () => {
+    sessionStorage.removeItem('blob_auth')
+    setIsAuthenticated(false)
+    setFiles([])
+    setCurrentFolder('')
+  }
+
   if (!isAuthenticated) {
     return <AuthPrompt onAuth={handleAuth} />
   }
@@ -76,6 +83,7 @@ export default function Home() {
       isLoading={isLoading}
       currentFolder={currentFolder}
       onFolderChange={handleFolderChange}
+      onLogout={handleLogout}
     />
   )
 }

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, FolderPlus, Download, Trash2, MoreVertical, Folder, File } from 'lucide-react'
+import { Upload, FolderPlus, Download, Trash2, MoreVertical, Folder, File, LogOut } from 'lucide-react'
+import CreateFolderModal from './create-folder-modal'
 
 interface FileItem {
   pathname: string
@@ -17,6 +18,7 @@ interface FileExplorerProps {
   isLoading: boolean
   currentFolder: string
   onFolderChange: (folder: string) => void
+  onLogout: () => void
 }
 
 const getFileIcon = (filename: string) => {
@@ -60,8 +62,11 @@ export default function FileExplorer({
   isLoading,
   currentFolder,
   onFolderChange,
+  onLogout,
 }: FileExplorerProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [showFolderModal, setShowFolderModal] = useState(false)
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredFiles = files.filter((f) => {
@@ -99,12 +104,13 @@ export default function FileExplorer({
     }
   }
 
-  const handleCreateFolder = async () => {
-    const folderName = prompt('Folder name:')
-    if (!folderName) return
-
+  const handleCreateFolder = async (folderName: string) => {
+    setIsCreatingFolder(true)
     const auth = sessionStorage.getItem('blob_auth')
-    if (!auth) return
+    if (!auth) {
+      setIsCreatingFolder(false)
+      return
+    }
 
     try {
       const response = await fetch('/api/create-folder', {
@@ -120,10 +126,13 @@ export default function FileExplorer({
       })
 
       if (response.ok) {
+        setShowFolderModal(false)
         onRefresh()
       }
     } catch (error) {
       console.error('Create folder error:', error)
+    } finally {
+      setIsCreatingFolder(false)
     }
   }
 
@@ -183,7 +192,7 @@ export default function FileExplorer({
                 <span className="hidden sm:inline">Upload</span>
               </button>
               <button
-                onClick={handleCreateFolder}
+                onClick={() => setShowFolderModal(true)}
                 disabled={isLoading}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-100 font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors border border-slate-700"
               >
@@ -196,6 +205,14 @@ export default function FileExplorer({
                 className="px-4 py-2 bg-slate-800 text-slate-100 font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors border border-slate-700"
               >
                 {isLoading ? '⟳' : '⟲'}
+              </button>
+              <button
+                onClick={onLogout}
+                className="px-4 py-2 bg-slate-800 text-slate-100 font-semibold rounded-lg hover:bg-slate-700 transition-colors border border-slate-700 flex items-center gap-2"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Logout</span>
               </button>
             </div>
           </div>
@@ -294,6 +311,13 @@ export default function FileExplorer({
           </div>
         )}
       </div>
+
+      <CreateFolderModal
+        isOpen={showFolderModal}
+        onClose={() => setShowFolderModal(false)}
+        onSubmit={handleCreateFolder}
+        isLoading={isCreatingFolder}
+      />
     </div>
   )
 }

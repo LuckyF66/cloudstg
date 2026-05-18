@@ -8,6 +8,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // If no token is available, return empty list (for demo/local dev)
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json({ files: [], demo: true })
+    }
+
     const { blobs } = await list()
 
     // Parse blobs and organize by path hierarchy
@@ -28,7 +33,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ files })
   } catch (error) {
-    console.error('Error listing files:', error)
-    return NextResponse.json({ error: 'Failed to list files' }, { status: 500 })
+    // Return empty list if token is missing (demo mode)
+    if (error instanceof Error && error.message.includes('No token found')) {
+      return NextResponse.json({ files: [], demo: true })
+    }
+    
+    return NextResponse.json({ error: 'Failed to list files', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }

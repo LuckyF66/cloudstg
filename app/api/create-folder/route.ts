@@ -16,6 +16,15 @@ export async function POST(request: NextRequest) {
 
     const pathname = parentPath ? `${parentPath}${folderName}/` : `${folderName}/`
 
+    // Demo mode: if no token is configured, simulate success
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json({
+        pathname: pathname,
+        folderName,
+        demo: true,
+      })
+    }
+
     // Create a marker file to represent the folder
     const blob = await put(pathname + '.folder', new Blob([''], { type: 'text/plain' }), {
       access: 'private',

@@ -19,6 +19,15 @@ export async function POST(request: NextRequest) {
     const filename = file.name
     const pathname = folder ? `${folder}/${filename}` : filename
 
+    // Demo mode: if no token is configured, simulate success
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json({
+        pathname,
+        filename,
+        demo: true,
+      })
+    }
+
     const blob = await put(pathname, file, {
       access: 'private',
     })
