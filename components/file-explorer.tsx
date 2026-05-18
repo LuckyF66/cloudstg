@@ -67,6 +67,9 @@ export default function FileExplorer({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [showFolderModal, setShowFolderModal] = useState(false)
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadFileName, setUploadFileName] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredFiles = files.filter((f) => {
@@ -100,24 +103,50 @@ export default function FileExplorer({
     const auth = sessionStorage.getItem('blob_auth')
     if (!auth) return
 
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Authorization': `Basic ${auth}` },
-        body: formData,
-      })
+    setIsUploading(true)
+    setUploadFileName(file.name)
+    setUploadProgress(0)
 
-      const data = await response.json()
-      
-      if (response.ok) {
-        console.log('[v0] Upload successful:', data.pathname)
-        onRefresh()
-      } else {
-        console.error('[v0] Upload failed:', data.error, data.details)
-      }
+    try {
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = Math.round((e.loaded / e.total) * 100)
+            setUploadProgress(percentComplete)
+          }
+        })
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            try {
+              const data = JSON.parse(xhr.responseText)
+              console.log('[v0] Upload successful:', data.pathname)
+              onRefresh()
+              resolve(data)
+            } catch (err) {
+              reject(new Error('Failed to parse response'))
+            }
+          } else {
+            reject(new Error('Upload failed'))
+          }
+        })
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error'))
+        })
+
+        xhr.open('POST', '/api/upload')
+        xhr.setRequestHeader('Authorization', `Basic ${auth}`)
+        xhr.send(formData)
+      })
     } catch (error) {
       console.error('[v0] Upload error:', error)
     } finally {
+      setIsUploading(false)
+      setUploadProgress(0)
+      setUploadFileName('')
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -266,6 +295,26 @@ export default function FileExplorer({
         onChange={handleUpload}
         className="hidden"
       />
+
+      {/* Upload Progress Bar */}
+      {isUploading && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-slate-900 border-b border-slate-800 p-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-slate-300">
+                Uploading: <span className="font-semibold">{uploadFileName}</span>
+              </span>
+              <span className="text-sm text-slate-400">{uploadProgress}%</span>
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-amber-500 h-full transition-all duration-200"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* File List */}
       <div className="max-w-6xl mx-auto p-4">
