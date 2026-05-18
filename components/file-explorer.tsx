@@ -70,10 +70,14 @@ export default function FileExplorer({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredFiles = files.filter((f) => {
-    if (!currentFolder) return !f.pathname.includes('/')
+    if (!currentFolder) {
+      // At root: show items that don't have a subfolder (either no "/" or "folder/" at end)
+      return !f.pathname.includes('/') || (f.isFolder && !f.pathname.slice(0, -1).includes('/'))
+    }
+    // In a folder: show items that are direct children
     const folderPrefix = currentFolder.endsWith('/') ? currentFolder : currentFolder + '/'
     const relativePath = f.pathname.slice(folderPrefix.length)
-    return relativePath && !relativePath.split('/').slice(0, -1).join('/')
+    return relativePath && !relativePath.slice(0, -1).includes('/')
   })
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

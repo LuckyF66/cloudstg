@@ -16,20 +16,37 @@ export async function GET(request: NextRequest) {
     const { blobs } = await list()
 
     // Parse blobs and organize by path hierarchy
-    const files = blobs.map((blob) => {
+    const filesMap = new Map<string, any>()
+    
+    blobs.forEach((blob) => {
       const pathname = blob.pathname
-      const parts = pathname.split('/')
-      const filename = parts.pop() || 'unknown'
-      const isFolder = pathname.endsWith('/')
-
-      return {
-        pathname,
-        filename,
-        isFolder,
-        size: blob.size,
-        uploadedAt: blob.uploadedAt,
+      
+      // Skip .folder marker files but register the folder
+      if (pathname.endsWith('.folder')) {
+        const folderPath = pathname.slice(0, -7) // Remove '.folder'
+        filesMap.set(folderPath, {
+          pathname: folderPath,
+          filename: folderPath.split('/').filter(Boolean).pop() || 'folder',
+          isFolder: true,
+          size: 0,
+          uploadedAt: blob.uploadedAt,
+        })
+      } else {
+        // Regular file - don't add if we haven't already added it as part of a folder
+        if (!filesMap.has(pathname)) {
+          const filename = pathname.split('/').pop() || 'unknown'
+          filesMap.set(pathname, {
+            pathname,
+            filename,
+            isFolder: false,
+            size: blob.size,
+            uploadedAt: blob.uploadedAt,
+          })
+        }
       }
     })
+
+    const files = Array.from(filesMap.values())
 
     return NextResponse.json({ files })
   } catch (error) {
