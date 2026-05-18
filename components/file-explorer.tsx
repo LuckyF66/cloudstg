@@ -124,6 +124,15 @@ export default function FileExplorer({
     }
 
     try {
+      // Calculate the correct parent path
+      let parentPath = ''
+      if (currentFolder) {
+        // Ensure parent path ends with /
+        parentPath = currentFolder.endsWith('/') ? currentFolder : currentFolder + '/'
+      }
+      
+      console.log('[v0] Creating folder:', folderName, 'with parentPath:', parentPath)
+
       const response = await fetch('/api/create-folder', {
         method: 'POST',
         headers: {
@@ -132,11 +141,13 @@ export default function FileExplorer({
         },
         body: JSON.stringify({
           folderName,
-          parentPath: currentFolder ? (currentFolder.endsWith('/') ? currentFolder : currentFolder + '/') : '',
+          parentPath,
         }),
       })
 
       if (response.ok) {
+        const data = await response.json()
+        console.log('[v0] Folder created with pathname:', data.pathname)
         setShowFolderModal(false)
         onRefresh()
       }
