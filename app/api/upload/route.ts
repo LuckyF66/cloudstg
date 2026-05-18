@@ -1,43 +1,36 @@
-import { put } from '@vercel/blob'
-import { NextRequest, NextResponse } from 'next/server'
-import { verifyBasicAuth, getUnauthorizedResponse } from '@/lib/auth'
+import { NextResponse } from 'next/server';
+import { put } from '@vercel/blob';
 
-export async function POST(request: NextRequest) {
-  if (!verifyBasicAuth(request)) {
-    return getUnauthorizedResponse()
+// LIHAT DI SINI: Password kamu juga sudah ditulis di sini
+const DIRECT_PASSWORD = 'admin#123';
+
+export async function POST(request: Request) {
+  const authHeader = request.headers.get('Authorization');
+  const password = authHeader?.replace('Basic ', '');
+
+  if (password !== DIRECT_PASSWORD) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    const folder = (formData.get('folder') as string) || ''
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const folder = formData.get('folder') as string || '';
 
     if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+      return NextResponse.json({ error: 'File tidak ditemukan' }, { status: 400 });
     }
 
-    const filename = file.name
-    const pathname = folder ? `${folder}/${filename}` : filename
+    const cleanFolder = folder ? (folder.endsWith('/') ? folder : folder + '/') : '';
+    const fullPath = `${cleanFolder}${file.name}`;
 
-    // Demo mode: if no token is configured, simulate success
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return NextResponse.json({
-        pathname,
-        filename,
-        demo: true,
-      })
-    }
+    const blob = await put(fullPath, file, {
+      access: 'public',
+      addRandomSuffix: false
+    });
 
-    const blob = await put(pathname, file, {
-      access: 'private',
-    })
-
-    return NextResponse.json({
-      pathname: blob.pathname,
-      filename,
-    })
+    return NextResponse.json({ success: true, blob });
   } catch (error) {
-    console.error('Upload error:', error)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    return NextResponse.json({ error: 'Gagal upload file' }, { status: 500 });
   }
 }
