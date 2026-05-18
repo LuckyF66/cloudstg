@@ -71,8 +71,9 @@ export default function FileExplorer({
 
   const filteredFiles = files.filter((f) => {
     if (!currentFolder) {
-      // At root: show items that don't have a "/" in their pathname
-      return !f.pathname.includes('/')
+      // At root: show items that don't have a "/" except at the end (for folders)
+      const pathWithoutTrailingSlash = f.pathname.endsWith('/') ? f.pathname.slice(0, -1) : f.pathname
+      return !pathWithoutTrailingSlash.includes('/')
     }
     // In a folder: show items that are direct children (pathname starts with folder/)
     const folderPrefix = currentFolder.endsWith('/') ? currentFolder : currentFolder + '/'
@@ -81,8 +82,9 @@ export default function FileExplorer({
     }
     // Get the part after the folder prefix
     const relativePath = f.pathname.slice(folderPrefix.length)
-    // Include if it's a direct child (no "/" in the relative path)
-    return !relativePath.includes('/')
+    // Include if it's a direct child (no "/" in the relative path, or ends with "/" for folders)
+    const relativePathWithoutTrailingSlash = relativePath.endsWith('/') ? relativePath.slice(0, -1) : relativePath
+    return !relativePathWithoutTrailingSlash.includes('/')
   })
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
