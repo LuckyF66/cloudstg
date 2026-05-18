@@ -91,6 +91,8 @@ export default function FileExplorer({
     const file = e.target.files?.[0]
     if (!file) return
 
+    console.log('[v0] Uploading file:', file.name, 'Size:', file.size, 'bytes', 'Type:', file.type)
+
     const formData = new FormData()
     formData.append('file', file)
     formData.append('folder', currentFolder)
@@ -105,11 +107,16 @@ export default function FileExplorer({
         body: formData,
       })
 
+      const data = await response.json()
+      
       if (response.ok) {
+        console.log('[v0] Upload successful:', data.pathname)
         onRefresh()
+      } else {
+        console.error('[v0] Upload failed:', data.error, data.details)
       }
     } catch (error) {
-      console.error('Upload error:', error)
+      console.error('[v0] Upload error:', error)
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
