@@ -1,327 +1,341 @@
-'use client'
+'use client';
 
-import { useState, useRef } from 'react'
-import { Upload, FolderPlus, Download, Trash2, MoreVertical, Folder, File, LogOut } from 'lucide-react'
-import CreateFolderModal from './create-folder-modal'
+import { useState, useEffect, useRef } from 'react';
+import { Upload, FolderPlus, Download, Trash2, LogOut, ArrowLeft, RefreshCw, Lock, FileText, Image, FileSpreadsheet, Presentation, File, Folder, Music, Archive } from 'lucide-react';
 
 interface FileItem {
-  pathname: string
-  filename: string
-  isFolder: boolean
-  size: number
-  uploadedAt: string
+  pathname: string;
+  filename: string;
+  isFolder: boolean;
+  size: number;
+  uploadedAt: string;
+  url: string;
 }
 
-interface FileExplorerProps {
-  files: FileItem[]
-  onRefresh: () => void
-  isLoading: boolean
-  currentFolder: string
-  onFolderChange: (folder: string) => void
-  onLogout: () => void
-}
-
-const getFileIcon = (filename: string) => {
-  const ext = filename.split('.').pop()?.toLowerCase()
-
-  if (!ext) return <File className="w-5 h-5" />
-
+// Komponen Ikon Custom: Mendeteksi Word, Excel, Canva, dan FLAC/Audio
+function FileIcon({ filename, isFolder }: { filename: string; isFolder: boolean }) {
+  if (isFolder) return <Folder className="w-6 h-6 text-amber-500 fill-amber-500" />;
+  
+  const ext = filename.split('.').pop()?.toLowerCase();
+  
   switch (ext) {
-    case 'pdf':
-      return <span className="text-red-400 font-bold">📄</span>
     case 'doc':
     case 'docx':
-      return <span className="text-blue-400 font-bold">📘</span>
+      return <FileText className="w-6 h-6 text-blue-500" />;
     case 'xls':
     case 'xlsx':
-      return <span className="text-green-400 font-bold">📗</span>
+      return <FileSpreadsheet className="w-6 h-6 text-green-500" />;
     case 'ppt':
     case 'pptx':
-      return <span className="text-orange-400 font-bold">📙</span>
+      return <Presentation className="w-6 h-6 text-orange-500" />;
+    case 'png':
     case 'jpg':
     case 'jpeg':
-    case 'png':
-    case 'gif':
+    case 'svg':
     case 'webp':
-      return <span className="text-purple-400 font-bold">🖼️</span>
+      return <Image className="w-6 h-6 text-purple-500" />;
+    case 'flac':
+    case 'mp3':
+    case 'wav':
+    case 'm4a':
+      return <Music className="w-6 h-6 text-cyan-500" />;
     case 'zip':
     case 'rar':
-    case '7z':
-      return <span className="text-yellow-400 font-bold">📦</span>
-    case 'txt':
-    case 'md':
-      return <span className="text-slate-400 font-bold">📝</span>
+      return <Archive className="w-6 h-6 text-yellow-600" />;
     default:
-      return <File className="w-5 h-5 text-slate-400" />
+      return <File className="w-6 h-6 text-slate-400" />;
   }
 }
 
-export default function FileExplorer({
-  files,
-  onRefresh,
-  isLoading,
-  currentFolder,
-  onFolderChange,
-  onLogout,
-}: FileExplorerProps) {
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
-  const [showFolderModal, setShowFolderModal] = useState(false)
-  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+export default function FileExplorer() {
+  const [password, setPassword] = useState('');
+  const [isAuth, setIsAuth] = useState(false);
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [currentFolder, setCurrentFolder] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [showFolderInput, setShowFolderInput] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const filteredFiles = files.filter((f) => {
+  useEffect(() => {
+    const savedPassword = localStorage.getItem('storage_pwd');
+    if (savedPassword) {
+      checkAndFetchFiles(savedPassword);
+    }
+  }, []);
+
+  async function checkAndFetchFiles(pwdToTest: string) {
+    setIsLoading(true);
+    try {
+      // Mengubah target ke API storage baru kita
+      const res = await fetch('/api/storage', {
+        headers: { 'Authorization': `Basic ${pwdToTest}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFiles(data.files || []);
+        setIsAuth(true);
+        localStorage.setItem('storage_pwd', pwdToTest);
+        setPassword(pwdToTest);
+      } else {
+        alert('Password salah atau sesi berakhir!');
+        handleLogout();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const filteredItems = files.filter(item => {
     if (!currentFolder) {
-      // At root: show items that don't have a subfolder (either no "/" or "folder/" at end)
-      return !f.pathname.includes('/') || (f.isFolder && !f.pathname.slice(0, -1).includes('/'))
+      return !item.pathname.includes('/');
     }
-    // In a folder: show items that are direct children
-    const folderPrefix = currentFolder.endsWith('/') ? currentFolder : currentFolder + '/'
-    const relativePath = f.pathname.slice(folderPrefix.length)
-    return relativePath && !relativePath.slice(0, -1).includes('/')
-  })
+    if (!item.pathname.startsWith(currentFolder)) return false;
+    const relativePath = item.pathname.slice(currentFolder.length);
+    const parts = relativePath.split('/').filter(Boolean);
+    return parts.length === 1;
+  });
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('folder', currentFolder)
-
-    const auth = sessionStorage.getItem('blob_auth')
-    if (!auth) return
+    setIsLoading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', currentFolder);
 
     try {
-      const response = await fetch('/api/upload', {
+      const res = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Authorization': `Basic ${auth}` },
-        body: formData,
-      })
-
-      if (response.ok) {
-        onRefresh()
-      }
-    } catch (error) {
-      console.error('Upload error:', error)
+        headers: { 'Authorization': `Basic ${password}` },
+        body: formData
+      });
+      if (res.ok) checkAndFetchFiles(password);
+    } catch (err) {
+      console.error(err);
     } finally {
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
-  const handleCreateFolder = async (folderName: string) => {
-    setIsCreatingFolder(true)
-    const auth = sessionStorage.getItem('blob_auth')
-    if (!auth) {
-      setIsCreatingFolder(false)
-      return
-    }
+  async function handleCreateFolder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+
+    setIsLoading(true);
+    const formData = new FormData();
+    formData.append('isFolder', 'true');
+    formData.append('folderName', newFolderName.trim());
+    formData.append('folder', currentFolder);
 
     try {
-      const response = await fetch('/api/create-folder', {
+      const res = await fetch('/api/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          folderName,
-          parentPath: currentFolder ? (currentFolder.endsWith('/') ? currentFolder : currentFolder + '/') : '',
-        }),
-      })
-
-      if (response.ok) {
-        setShowFolderModal(false)
-        onRefresh()
+        headers: { 'Authorization': `Basic ${password}` },
+        body: formData
+      });
+      if (res.ok) {
+        setNewFolderName('');
+        setShowFolderInput(false);
+        checkAndFetchFiles(password);
       }
-    } catch (error) {
-      console.error('Create folder error:', error)
-    } finally {
-      setIsCreatingFolder(false)
+    } catch (err) {
+      console.error(err);
     }
   }
 
-  const handleDelete = async (file: FileItem) => {
-    if (!confirm('Are you sure you want to delete this?')) return
-
-    const auth = sessionStorage.getItem('blob_auth')
-    if (!auth) return
-
+  async function handleDelete(item: FileItem) {
+    if (!confirm(`Hapus ${item.filename}?`)) return;
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/delete', {
+      const res = await fetch('/api/storage', {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
+        headers: { 
+          'Authorization': `Basic ${password}`,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ url: file.url }),
-      })
-
-      if (response.ok) {
-        onRefresh()
-      }
-    } catch (error) {
-      console.error('Delete error:', error)
+        body: JSON.stringify({ url: item.url || item.pathname })
+      });
+      if (res.ok) checkAndFetchFiles(password);
+    } catch (err) {
+      console.error(err);
     }
   }
 
-  const handleDownload = (pathname: string, filename: string) => {
-    const auth = sessionStorage.getItem('blob_auth')
-    if (!auth) return
+  // Trik Unduh Langsung via Blob URL agar teman kelompok tinggal klik unduh instan
+  async function handleDownload(item: FileItem) {
+    try {
+      const response = await fetch(item.url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = item.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      alert('Gagal mengunduh instan. Membuka tab baru...');
+      window.open(item.url, '_blank');
+    }
+  }
 
-    const url = `/api/file?pathname=${encodeURIComponent(pathname)}`
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
+  function handleLogout() {
+    localStorage.removeItem('storage_pwd');
+    setIsAuth(false);
+    setPassword('');
+    setFiles([]);
+    setCurrentFolder('');
+  }
+
+  if (!isAuth) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4 bg-slate-950 text-slate-50">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <div className="flex justify-center mb-4 text-amber-500">
+            <Lock className="w-12 h-12" />
+          </div>
+          <h2 className="text-xl font-bold text-center mb-6">School Storage Access</h2>
+          <form onSubmit={(e) => { e.preventDefault(); checkAndFetchFiles(password); }} className="space-y-4">
+            <input
+              type="password"
+              placeholder="Masukkan Password (Clue: admin#...)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 text-slate-100"
+              required
+            />
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 bg-amber-500 text-slate-950 font-bold rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? 'Memproses...' : 'Masuk Ke Penyimpanan'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      {/* Toolbar */}
-      <div className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-wrap gap-3 items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-slate-100 truncate">
-                {currentFolder ? currentFolder : 'Cloud Storage'}
-              </h1>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-slate-950 font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
-              >
-                <Upload className="w-5 h-5" />
-                <span className="hidden sm:inline">Upload</span>
-              </button>
-              <button
-                onClick={() => setShowFolderModal(true)}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-100 font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors border border-slate-700"
-              >
-                <FolderPlus className="w-5 h-5" />
-                <span className="hidden sm:inline">New Folder</span>
-              </button>
-              <button
-                onClick={onRefresh}
-                disabled={isLoading}
-                className="px-4 py-2 bg-slate-800 text-slate-100 font-semibold rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors border border-slate-700"
-              >
-                {isLoading ? '⟳' : '⟲'}
-              </button>
-              <button
-                onClick={onLogout}
-                className="px-4 py-2 bg-slate-800 text-slate-100 font-semibold rounded-lg hover:bg-slate-700 transition-colors border border-slate-700 flex items-center gap-2"
-                title="Logout"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
-            </div>
-          </div>
-
-          {currentFolder && (
-            <button
-              onClick={() => {
-                const parent = currentFolder.split('/').slice(0, -2).join('/')
-                onFolderChange(parent)
-              }}
-              className="mt-3 text-sm text-amber-400 hover:text-amber-300 transition-colors"
-            >
-              ← Back
-            </button>
-          )}
+    <div className="max-w-4xl mx-auto p-4 min-h-screen bg-slate-950 text-slate-50">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl mb-6">
+        <div>
+          <h1 className="text-lg font-bold truncate max-w-xs sm:max-w-md">
+            📁 {currentFolder ? `root / ${currentFolder.replace(/\/$/, '').replace(/\//g, ' / ')}` : 'Root Storage'}
+          </h1>
+          <p className="text-xs text-slate-400">Total item di folder ini: {filteredItems.length}</p>
+        </div>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => checkAndFetchFiles(password)}
+            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+          >
+            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="p-2 bg-red-950/40 text-red-400 hover:bg-red-950 rounded-xl transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        onChange={handleUpload}
-        className="hidden"
-      />
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading}
+          className="flex items-center justify-center gap-2 py-3 bg-amber-500 text-slate-950 font-bold rounded-xl hover:bg-amber-600 transition-colors"
+        >
+          <Upload className="w-5 h-5" /> Upload File
+        </button>
+        <input ref={fileInputRef} type="file" onChange={handleUpload} className="hidden" />
 
-      {/* File List */}
-      <div className="max-w-6xl mx-auto p-4">
-        {filteredFiles.length === 0 ? (
-          <div className="text-center py-12">
-            <Folder className="w-16 h-16 mx-auto text-slate-700 mb-4" />
-            <p className="text-slate-400 text-lg">No files or folders yet</p>
-          </div>
+        <button
+          onClick={() => setShowFolderInput(!showFolderInput)}
+          disabled={isLoading}
+          className="flex items-center justify-center gap-2 py-3 bg-slate-900 border border-slate-800 font-bold rounded-xl hover:bg-slate-800 transition-colors"
+        >
+          <FolderPlus className="w-5 h-5 text-amber-500" /> New Folder
+        </button>
+      </div>
+
+      {showFolderInput && (
+        <form onSubmit={handleCreateFolder} className="flex gap-2 mb-6 bg-slate-900 p-3 border border-slate-800 rounded-xl">
+          <input
+            type="text"
+            placeholder="Nama folder sekolah baru..."
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg focus:outline-none focus:border-amber-500 text-sm text-slate-100"
+            required
+          />
+          <button type="submit" className="px-4 py-2 bg-amber-500 text-slate-950 text-sm font-bold rounded-lg hover:bg-amber-600">
+            Buat
+          </button>
+        </form>
+      )}
+
+      {currentFolder && (
+        <button
+          onClick={() => {
+            const parts = currentFolder.split('/').filter(Boolean);
+            parts.pop();
+            setCurrentFolder(parts.length ? parts.join('/') + '/' : '');
+          }}
+          className="flex items-center gap-2 text-sm text-amber-500 hover:underline mb-4"
+        >
+          <ArrowLeft className="w-4 h-4" /> Kembali
+        </button>
+      )}
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+        {filteredItems.length === 0 ? (
+          <div className="text-center py-12 text-slate-500 text-sm">Folder kosong. Silakan unggah dokumen!</div>
         ) : (
-          <div className="space-y-2">
-            {filteredFiles.map((file) => (
-              <div
-                key={file.pathname}
-                className="flex items-center gap-3 p-3 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 hover:border-slate-700 transition-colors group"
-              >
-                <div className="flex-shrink-0">
-                  {file.isFolder ? (
-                    <Folder className="w-5 h-5 text-amber-500" />
-                  ) : (
-                    getFileIcon(file.filename)
-                  )}
+          <div className="divide-y divide-slate-800/60">
+            {filteredItems.map((item) => (
+              <div key={item.pathname} className="flex items-center justify-between p-4 hover:bg-slate-800/40">
+                <div 
+                  className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                  onClick={() => { if (item.isFolder) setCurrentFolder(item.pathname); }}
+                >
+                  <FileIcon filename={item.filename} isFolder={item.isFolder} />
+                  <div className="truncate">
+                    <p className="font-medium text-sm text-slate-200 truncate">{item.filename}</p>
+                    <p className="text-xs text-slate-500">
+                      {item.isFolder ? 'Folder Dokumen' : `${(item.size / 1024).toFixed(1)} KB`}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
-                  if (file.isFolder) {
-                    onFolderChange(file.pathname)
-                  }
-                }}>
-                  <p className="text-slate-100 font-medium truncate">{file.filename}</p>
-                  <p className="text-slate-500 text-xs">
-                    {file.isFolder ? 'Folder' : `${(file.size / 1024).toFixed(2)} KB`}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {!file.isFolder && (
-                    <button
-                      onClick={() => handleDownload(file.pathname, file.filename)}
-                      className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-700 rounded transition-colors"
-                      title="Download"
+                <div className="flex gap-1 ml-2">
+                  {!item.isFolder && (
+                    <button 
+                      onClick={() => handleDownload(item)}
+                      className="p-2 text-slate-400 hover:text-slate-100"
                     >
                       <Download className="w-4 h-4" />
                     </button>
                   )}
-
-                  <div className="relative">
-                    <button
-                      onClick={() => setOpenMenuId(openMenuId === file.pathname ? null : file.pathname)}
-                      className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-700 rounded transition-colors"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-
-                    {openMenuId === file.pathname && (
-                      <div className="absolute right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-20">
-                        <button
-                          onClick={() => {
-                            handleDelete(file)
-                            setOpenMenuId(null)
-                          }}
-                          className="block w-full text-left px-4 py-2 text-red-400 hover:bg-slate-700 hover:text-red-300 transition-colors flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button 
+                    onClick={() => handleDelete(item)}
+                    className="p-2 text-slate-500 hover:text-red-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-
-      <CreateFolderModal
-        isOpen={showFolderModal}
-        onClose={() => setShowFolderModal(false)}
-        onSubmit={handleCreateFolder}
-        isLoading={isCreatingFolder}
-      />
     </div>
-  )
-}
+  );
+                                       }

@@ -1,43 +1,20 @@
-import { put } from '@vercel/blob'
-import { NextRequest, NextResponse } from 'next/server'
-import { verifyBasicAuth, getUnauthorizedResponse } from '@/lib/auth'
+import { NextResponse } from 'next/server';
+import { put } from '@vercel/blob';
 
-export async function POST(request: NextRequest) {
-  if (!verifyBasicAuth(request)) {
-    return getUnauthorizedResponse()
+export async function POST(request: Request) {
+  const authHeader = request.headers.get('Authorization');
+  const password = authHeader?.replace('Basic ', '');
+  if (password !== process.env.STORAGE_PASSWORD) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
   try {
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    const folder = (formData.get('folder') as string) || ''
-
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-    }
-
-    const filename = file.name
-    const pathname = folder ? `${folder}/${filename}` : filename
-
-    // Demo mode: if no token is configured, simulate success
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return NextResponse.json({
-        pathname,
-        filename,
-        demo: true,
-      })
-    }
-
-    const blob = await put(pathname, file, {
-      access: 'private',
-    })
-
-    return NextResponse.json({
-      pathname: blob.pathname,
-      filename,
-    })
-  } catch (error) {
-    console.error('Upload error:', error)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
-  }
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const folder = formData.get('folder') as string || '';
+    if (!file) return NextResponse.json({ error: 'File tidak ditemukan' }, { status: 400 });
+    const cleanFolder = folder ? (folder.endsWith('/') ? folder : folder + '/') : '';
+    const fullPath = `${cleanFolder}${file.name}`;
+    const blob = await put(fullPath, file, { access: 'public', addRandomSuffix: false });
+    return NextResponse.json({ success: true, blob });
+  } catch (error) { return NextResponse.json({ error: 'Gagal upload file' }, { status: 500 }); }
 }
