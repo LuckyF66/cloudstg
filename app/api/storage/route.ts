@@ -4,12 +4,16 @@ import { list, del } from '@vercel/blob';
 function checkAuth(request: Request) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return false;
-  const password = authHeader.replace('Basic ', '');
+  // Kita pakai sistem token simpel tanpa keyword "Basic" bawaan browser
+  const password = authHeader.replace('Bearer ', '');
   return password === process.env.STORAGE_PASSWORD;
 }
 
 export async function GET(request: Request) {
-  if (!checkAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!checkAuth(request)) {
+    // Diubah agar tidak memicu pop-up otomatis browser
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const { blobs } = await list({ prefix: '' });
     const files = blobs.filter(blob => !blob.pathname.endsWith('.keep')).map(blob => {
