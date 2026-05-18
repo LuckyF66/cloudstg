@@ -24,12 +24,14 @@ export async function GET(request: NextRequest) {
       // Skip .folder marker files but register the folder
       if (pathname.endsWith('.folder')) {
         const folderPath = pathname.slice(0, -7) // Remove '.folder'
+        const markerUrl = blob.url // The URL of the .folder marker file
         filesMap.set(folderPath, {
           pathname: folderPath,
           filename: folderPath.split('/').filter(Boolean).pop() || 'folder',
           isFolder: true,
           size: 0,
           uploadedAt: blob.uploadedAt,
+          url: markerUrl, // Store the marker file URL for deletion
         })
       } else {
         // Regular file - don't add if we haven't already added it as part of a folder
@@ -41,6 +43,7 @@ export async function GET(request: NextRequest) {
             isFolder: false,
             size: blob.size,
             uploadedAt: blob.uploadedAt,
+            url: blob.url,
           })
         }
       }

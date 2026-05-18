@@ -140,7 +140,7 @@ export default function FileExplorer({
     }
   }
 
-  const handleDelete = async (pathname: string) => {
+  const handleDelete = async (file: FileItem) => {
     if (!confirm('Are you sure you want to delete this?')) return
 
     const auth = sessionStorage.getItem('blob_auth')
@@ -153,7 +153,7 @@ export default function FileExplorer({
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pathname }),
+        body: JSON.stringify({ url: file.url }),
       })
 
       if (response.ok) {
@@ -298,7 +298,7 @@ export default function FileExplorer({
                       <div className="absolute right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-20">
                         <button
                           onClick={() => {
-                            handleDelete(file.pathname)
+                            handleDelete(file)
                             setOpenMenuId(null)
                           }}
                           className="block w-full text-left px-4 py-2 text-red-400 hover:bg-slate-700 hover:text-red-300 transition-colors flex items-center gap-2"

@@ -8,10 +8,10 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const { pathname } = await request.json()
+    const { url, pathname } = await request.json()
 
-    if (!pathname) {
-      return NextResponse.json({ error: 'No pathname provided' }, { status: 400 })
+    if (!url && !pathname) {
+      return NextResponse.json({ error: 'No URL or pathname provided' }, { status: 400 })
     }
 
     // Demo mode: if no token is configured, simulate success
@@ -19,11 +19,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true, demo: true })
     }
 
-    await del(pathname)
+    // Use URL if provided (preferred), otherwise fall back to pathname
+    const deleteTarget = url || pathname
+    
+    await del(deleteTarget)
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Delete error:', error)
-    return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error('[v0] Delete error:', errorMsg)
+    return NextResponse.json({ error: 'Delete failed', details: errorMsg }, { status: 500 })
   }
 }
