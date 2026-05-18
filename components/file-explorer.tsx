@@ -129,7 +129,12 @@ export default function FileExplorer({
               reject(new Error('Failed to parse response'))
             }
           } else {
-            reject(new Error('Upload failed'))
+            try {
+              const errorData = JSON.parse(xhr.responseText)
+              reject(new Error(`Upload failed: ${errorData.error}${errorData.details ? ' - ' + errorData.details : ''}`))
+            } catch {
+              reject(new Error(`Upload failed with status ${xhr.status}`))
+            }
           }
         })
 
